@@ -16,6 +16,7 @@
     (package-refresh-contents)
     (package-install pkg)))
 
+
 ;; -------------------------------
 ;; AUCTeX / LaTeX Configuration
 ;; -------------------------------
@@ -102,6 +103,76 @@
   (define-key c-mode-map  (kbd "C-c f") 'clang-format-buffer)
   (define-key c++-mode-map (kbd "C-c f") 'clang-format-buffer))
 
+
+;; -------------------------------
+;; Python Mode and Language Support (Lazy Loaded)
+;; -------------------------------
+
+(use-package python
+  :mode ("\\.py\\'" . python-mode)
+  :hook ((python-mode . eglot-ensure)
+         (python-mode . company-mode)
+         (python-mode . eldoc-mode)
+         (python-mode . my-auto-activate-venv)
+         (python-mode . display-line-numbers-mode)
+         (python-mode . python-black-on-save-mode))
+  :init
+  ;; Ensure supporting packages are installed only when needed
+  (use-package python-black :ensure t :defer t)
+  (use-package pyvenv :ensure t :defer t)
+  (use-package flycheck :ensure t :defer t)
+  (use-package yasnippet :ensure t :defer t)
+  :config
+  ;; -------------------------------
+  ;; Eglot LSP
+  ;; -------------------------------
+  (add-to-list 'eglot-server-programs
+               '(python-mode . ("pylsp"))) ;; or pyright-langserver
+
+  ;; -------------------------------
+  ;; Virtual Environment Handling
+  ;; -------------------------------
+  (require 'pyvenv)
+  (pyvenv-mode 1)
+  (setq pyvenv-workon "default")
+
+  (defun my-auto-activate-venv ()
+    "Automatically activate .venv if present in project."
+    (let ((venv-path (locate-dominating-file default-directory ".venv")))
+      (when venv-path
+        (pyvenv-activate (expand-file-name ".venv" venv-path)))))
+
+  ;; -------------------------------
+  ;; Code Formatting (Black)
+  ;; -------------------------------
+  (require 'python-black)
+  (setq python-black-command "black"
+        python-black-extra-args '("--line-length" "88"))
+
+  (with-eval-after-load 'python
+    (define-key python-mode-map (kbd "C-c f") 'python-black-buffer))
+
+  ;; -------------------------------
+  ;; Syntax Checking (Flycheck fallback)
+  ;; -------------------------------
+  (require 'flycheck)
+  (add-hook 'eglot-managed-mode-hook
+            (lambda () (flycheck-mode -1)))
+  (add-hook 'python-mode-hook
+            (lambda () (unless (eglot-managed-p)
+                         (flycheck-mode 1))))
+
+  ;; -------------------------------
+  ;; Misc. Enhancements
+  ;; -------------------------------
+  (setq python-indent-offset 4
+        indent-tabs-mode nil
+        eldoc-idle-delay 0.3
+        eldoc-echo-area-use-multiline-p t)
+  (font-lock-add-keywords 'python-mode
+                          '(("\\<\\(TODO\\|FIXME\\|NOTE\\):" 1 font-lock-warning-face t))))
+
+
 ;; -------------------------------
 ;; Doom-Themes Configuration
 ;; -------------------------------
@@ -122,5 +193,23 @@
 ;; Custom-set Variables / Faces
 ;; -------------------------------
 (custom-set-variables
- '(package-selected-packages nil))
-(custom-set-faces)
+ ;; custom-set-variables was added by Custom.
+ ;; If you edit it by hand, you could mess it up, so be careful.
+ ;; Your init file should contain only one such instance.
+ ;; If there is more than one, they won't work right.
+ '(package-selected-packages
+   '(all-the-icons doom-modeline yasnippet pyvenv python-black pdf-tools flycheck doom-themes company clang-format auctex)))
+(custom-set-faces
+ ;; custom-set-faces was added by Custom.
+ ;; If you edit it by hand, you could mess it up, so be careful.
+ ;; Your init file should contain only one such instance.
+ ;; If there is more than one, they won't work right.
+ )
+
+(use-package all-the-icons
+  :ensure t)
+
+
+(use-package doom-modeline
+  :ensure t
+  :init (doom-modeline-mode 1))
