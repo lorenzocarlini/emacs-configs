@@ -206,10 +206,22 @@
  ;; If there is more than one, they won't work right.
  )
 
-(use-package all-the-icons
-  :ensure t)
-
-
+;; -------------------------------
+;; Doom Modeline - Portable (No Icon Fonts)
+;; -------------------------------
 (use-package doom-modeline
   :ensure t
-  :init (doom-modeline-mode 1))
+  :init
+  (doom-modeline-mode 1)
+  :custom
+  ;; Disable all fancy fonts/icons for portability
+  (doom-modeline-icon nil)
+  (doom-modeline-major-mode-icon nil)
+  (doom-modeline-buffer-file-name-style 'relative-to-project)
+  (doom-modeline-buffer-state-icon nil)
+  (doom-modeline-buffer-modification-icon nil)
+  (doom-modeline-env-version nil)
+  (doom-modeline-indent-info nil)
+  (doom-modeline-bar-width 1)
+  (doom-modeline-height 18)
+  (doom-modeline-minor-modes nil))
