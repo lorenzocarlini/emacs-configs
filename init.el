@@ -6,16 +6,13 @@
 (add-to-list 'package-archives '("melpa" . "https://melpa.org/packages/"))
 (package-initialize)
 
-;; Disable splash screen and initial scratch message
 (setq inhibit-startup-message t
       initial-scratch-message nil)
 
-;; Ensure packages are installed
 (dolist (pkg '(eglot company clang-format auctex pdf-tools doom-themes))
   (unless (package-installed-p pkg)
     (package-refresh-contents)
     (package-install pkg)))
-
 
 ;; -------------------------------
 ;; AUCTeX / LaTeX Configuration
@@ -23,35 +20,27 @@
 (require 'tex)
 (require 'preview)
 
-;; Enable PDF mode by default
 (setq TeX-PDF-mode t
       TeX-process-asynchronous t
-      TeX-save-query nil        ;; Don't ask to save buffers
-      TeX-show-compilation nil    ;; Show compilation buffer
-      TeX-command-run-all t     ;; Compile -> view -> bibtex automatically
+      TeX-save-query nil
+      TeX-show-compilation nil
+      TeX-command-run-all t
       TeX-command-default "LaTeX")
 
-;; Preview settings
 (add-hook 'LaTeX-mode-hook 'LaTeX-preview-setup)
 (setq preview-image-type 'png)
 
-
-
-;; PDF Tools setup
 (use-package pdf-tools
   :ensure t
   :config
   (pdf-tools-install)
   (setq TeX-view-program-selection '((output-pdf "PDF Tools")))
   (setq TeX-source-correlate-start-server t)
-  ;; Auto-refresh PDF after compilation
   (add-hook 'TeX-after-compilation-finished-functions
             #'TeX-revert-document-buffer))
 
-;; Automatically revert DocView buffers if used
 (add-hook 'doc-view-mode-hook 'auto-revert-mode)
 
-;; Optional: force C-c C-c to compile & refresh without prompts
 (defun my-latex-build-and-view ()
   "Compile LaTeX and refresh PDF buffer without prompts."
   (interactive)
@@ -62,7 +51,7 @@
   (define-key LaTeX-mode-map (kbd "C-c C-c") 'my-latex-build-and-view))
 
 ;; -------------------------------
-;; Eglot (LSP) Configuration
+;; Eglot Configuration
 ;; -------------------------------
 (add-hook 'c-mode-hook 'eglot-ensure)
 (add-hook 'c++-mode-hook 'eglot-ensure)
@@ -74,15 +63,12 @@
       eglot-autoreconnect t)
 
 ;; -------------------------------
-;; Company (Completion) Setup
+;; Company Setup
 ;; -------------------------------
 (add-hook 'after-init-hook 'global-company-mode)
-
 (setq company-idle-delay 0.2
       company-minimum-prefix-length 1
       company-tooltip-align-annotations t)
-
-;; Disable company in shell-mode
 (add-hook 'shell-mode-hook (lambda () (company-mode -1)))
 
 ;; -------------------------------
@@ -94,83 +80,104 @@
   "Format buffer with clang-format if in C/C++ mode."
   (when (derived-mode-p 'c-mode 'c++-mode)
     (clang-format-buffer)))
-
-;; Auto-format before saving C/C++ files
 (add-hook 'before-save-hook 'my-c-cpp-format-buffer)
 
-;; Optional: manual formatting keybinding
 (with-eval-after-load 'cc-mode
   (define-key c-mode-map  (kbd "C-c f") 'clang-format-buffer)
   (define-key c++-mode-map (kbd "C-c f") 'clang-format-buffer))
 
-
 ;; -------------------------------
-;; Python Mode and Language Support (Lazy Loaded)
+;; Python Mode - Full Portable Setup
 ;; -------------------------------
 
-(use-package python
-  :mode ("\\.py\\'" . python-mode)
-  :hook ((python-mode . eglot-ensure)
-         (python-mode . company-mode)
-         (python-mode . eldoc-mode)
-         (python-mode . my-auto-activate-venv)
-         (python-mode . display-line-numbers-mode)
-         (python-mode . python-black-on-save-mode))
-  :init
-  ;; Ensure supporting packages are installed only when needed
-  (use-package python-black :ensure t :defer t)
-  (use-package pyvenv :ensure t :defer t)
-  (use-package flycheck :ensure t :defer t)
-  (use-package yasnippet :ensure t :defer t)
-  :config
-  ;; -------------------------------
-  ;; Eglot LSP
-  ;; -------------------------------
-  (add-to-list 'eglot-server-programs
-               '(python-mode . ("pylsp"))) ;; or pyright-langserver
 
-  ;; -------------------------------
-  ;; Virtual Environment Handling
-  ;; -------------------------------
-  (require 'pyvenv)
-  (pyvenv-mode 1)
-  (setq pyvenv-workon "default")
+;; Ensure Emacs uses Python 3 globally
+(let ((python3-bin (or (executable-find "python3")
+                       (executable-find "python"))))
+  (when python3-bin
+    (setq python-shell-interpreter python3-bin)
+    (add-to-list 'exec-path (file-name-directory python3-bin))
+    (setenv "PATH" (concat (file-name-directory python3-bin) ":" (getenv "PATH")))))
 
-  (defun my-auto-activate-venv ()
-    "Automatically activate .venv if present in project."
-    (let ((venv-path (locate-dominating-file default-directory ".venv")))
-      (when venv-path
-        (pyvenv-activate (expand-file-name ".venv" venv-path)))))
+;; Ensure the Emacs debugger (M-x pdb) uses python3 -m pdb
+(setq gud-pdb-command-name "python3 -m pdb")
 
-  ;; -------------------------------
-  ;; Code Formatting (Black)
-  ;; -------------------------------
-  (require 'python-black)
-  (setq python-black-command "black"
-        python-black-extra-args '("--line-length" "88"))
+;; Set Python indent globally before loading python-black
+(setq python-indent-offset 4
+      indent-tabs-mode nil)
 
-  (with-eval-after-load 'python
-    (define-key python-mode-map (kbd "C-c f") 'python-black-buffer))
+;; Load python-black early (so it sees python-indent-offset)
+(use-package python-black
+  :ensure t)
 
-  ;; -------------------------------
-  ;; Syntax Checking (Flycheck fallback)
-  ;; -------------------------------
+(use-package pyvenv
+  :ensure t
+  :defer t)
+
+(use-package flycheck
+  :ensure t
+  :defer t)
+
+(defun my-auto-activate-venv ()
+  "Activate project .venv if present."
+  (let ((venv-dir (locate-dominating-file default-directory ".venv")))
+    (when venv-dir
+      (pyvenv-activate (expand-file-name ".venv" venv-dir))
+      (setq python-shell-interpreter
+            (expand-file-name "bin/python" (expand-file-name ".venv" venv-dir)))
+      (message "Activated virtualenv: %s" venv-dir))))
+
+(defun my-python-setup ()
+  "Setup Python environment for current buffer."
+  (my-auto-activate-venv)
+  (company-mode 1)
+  (eldoc-mode 1)
+  (display-line-numbers-mode 1)
+  ;; Buffer-local font-lock TODOs
+  (font-lock-add-keywords nil
+                          '(("\\<\\(TODO\\|FIXME\\|NOTE\\):" 1 font-lock-warning-face t)))
+  ;; Enable python-black-on-save per buffer
+  (python-black-on-save-mode 1)
+  ;; Keybinding for manual formatting
+  (define-key python-mode-map (kbd "C-c f") 'python-black-buffer)
+  ;; Flycheck setup
   (require 'flycheck)
-  (add-hook 'eglot-managed-mode-hook
-            (lambda () (flycheck-mode -1)))
-  (add-hook 'python-mode-hook
-            (lambda () (unless (eglot-managed-p)
-                         (flycheck-mode 1))))
+  (with-eval-after-load 'eglot
+    (add-hook 'eglot-managed-mode-hook (lambda () (flycheck-mode -1))))
+  (unless (and (fboundp 'eglot-managed-p) (eglot-managed-p))
+    (flycheck-mode 1))
+  ;; Eglot LSP
+  (when (executable-find "pylsp")
+    (eglot-ensure)))
 
-  ;; -------------------------------
-  ;; Misc. Enhancements
-  ;; -------------------------------
-  (setq python-indent-offset 4
-        indent-tabs-mode nil
-        eldoc-idle-delay 0.3
-        eldoc-echo-area-use-multiline-p t)
-  (font-lock-add-keywords 'python-mode
-                          '(("\\<\\(TODO\\|FIXME\\|NOTE\\):" 1 font-lock-warning-face t))))
+(add-hook 'python-mode-hook 'my-python-setup)
+
+(with-eval-after-load 'eglot
+  (add-to-list 'eglot-server-programs
+               '(python-mode . ("pylsp"))))
+
+;; -------------------------------
+;; Run Python File in Bottom Buffer
+;; -------------------------------
+(defun my-run-python-file ()
+  "Save, format with black, and run the current Python file in a small bottom buffer."
+  (interactive)
+  (save-buffer)
+  (when (eq major-mode 'python-mode)
+    (python-black-buffer))
+  (let ((command (concat (or python-shell-interpreter "python3")
+                         " "
+                         (shell-quote-argument buffer-file-name))))
+    (let ((display-buffer-alist
+           '(("\\*Python Output\\*"
+              (display-buffer-reuse-window display-buffer-at-bottom)
+              (window-height . 15)))))
+      (compilation-start command 'compilation-mode
+                         (lambda (_) "*Python Output*")))))
+
+(add-hook 'python-mode-hook
+          (lambda ()
+            (local-set-key (kbd "<f5>") 'my-run-python-file)))
 
 
 ;; -------------------------------
@@ -193,18 +200,9 @@
 ;; Custom-set Variables / Faces
 ;; -------------------------------
 (custom-set-variables
- ;; custom-set-variables was added by Custom.
- ;; If you edit it by hand, you could mess it up, so be careful.
- ;; Your init file should contain only one such instance.
- ;; If there is more than one, they won't work right.
  '(package-selected-packages
    '(all-the-icons doom-modeline yasnippet pyvenv python-black pdf-tools flycheck doom-themes company clang-format auctex)))
-(custom-set-faces
- ;; custom-set-faces was added by Custom.
- ;; If you edit it by hand, you could mess it up, so be careful.
- ;; Your init file should contain only one such instance.
- ;; If there is more than one, they won't work right.
- )
+(custom-set-faces)
 
 ;; -------------------------------
 ;; Doom Modeline - Portable (No Icon Fonts)
@@ -214,7 +212,6 @@
   :init
   (doom-modeline-mode 1)
   :custom
-  ;; Disable all fancy fonts/icons for portability
   (doom-modeline-icon nil)
   (doom-modeline-major-mode-icon nil)
   (doom-modeline-buffer-file-name-style 'relative-to-project)
